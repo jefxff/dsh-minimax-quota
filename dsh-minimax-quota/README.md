@@ -13,14 +13,17 @@ Host's cached snapshot. No command to run, nothing to click.
 
 ## When it appears
 
-The reading belongs to MiniMax sessions. The browser half reads the Session's
-`modelSelection` projection — the same value the composer's model seat shows —
-and renders nothing unless the selected provider or model id names MiniMax
-(for example provider `minimax-cn`, or model `minimax/minimax-m2` through an
-aggregator). Switching to DeepSeek or any other model removes the reading,
-stops the 15-second route polling and suppresses low-quota notifications;
-switching back brings it back. A blank Session with no selection yet shows
-nothing.
+The reading belongs to MiniMax sessions. `conversation.composer.dock` is a
+Session-scoped slot, so the framework passes the Session id to the entry's
+`inject` callback. The entry resolves that Session's `modelSelection`
+projection — the same value the composer's model seat shows — from the
+Session binding's `faceOf('modelSelection')` entry, and the component
+subscribes to it. It renders nothing unless the selected
+provider or model id names MiniMax (for example provider `minimax-cn`, or model
+`minimax/minimax-m2` through an aggregator). Switching to DeepSeek or any other
+model re-renders the entry and removes the reading, stops the 15-second route
+polling and suppresses low-quota notifications; switching back brings it back.
+A blank Session with no selection yet shows nothing.
 
 ![status line states](../docs/states.png)
 
@@ -133,13 +136,24 @@ host's own turn and token statistics:
 ```js
 ctx.slots.inject('conversation.composer.dock', () =>
   ctx.slots.register(
-    { name: 'conversation.composer.dock', id: 'minimax-quota', order: 20 },
+    {
+      name: 'conversation.composer.dock',
+      id: 'minimax-quota',
+      order: 20,
+      inject: (sessionId) => ({
+        translate,
+        modelSelection: () => modelSelectionFace(ctx, sessionId),
+      }),
+    },
     QuotaIndicator,
   ),
 )
 ```
 
-The entry reads `useProjection('modelSelection')` before rendering, so it only
+The Session-scoped dock passes its Session id to `inject`; `modelSelectionFace`
+resolves the Session binding's `faceOf('modelSelection')` projection, the same
+one the model seat reads. The component subscribes to that face with
+`useSyncExternalStore`, so a model switch reaches it immediately and it only
 polls the Host's route while the Session routes to MiniMax. It reads the route
 every 15 seconds and re-renders the countdown every 20 seconds. Its styles are
 rendered as a React element inside the component, so unmounting the entry
@@ -210,12 +224,14 @@ Two harnesses live outside the package, in the repository root:
   endpoint with the key from the credential store, and asserts the snapshot
   and the loopback guard.
 - `tools/client-render.mjs` loads `client.js` the way the browser's module
-  table does, renders the component for every status, and asserts the tone,
-  the bar width, the percentage, the countdown and the warning mark. It also
-  asserts the model gate: a DeepSeek session and a Session without a selection
-  render nothing, while a MiniMax model reached through an aggregator stays
-  visible. `tools/extract-theme.py` extracts the host's own theme variables so
-  the preview is faithful.
+  table does, drives the dock entry's real `inject(sessionId)` path through a
+  Session-binding stand-in, renders the component for every status, and
+  asserts the tone, the bar width, the percentage, the countdown and the
+  warning mark. It also asserts the model gate: a DeepSeek session and a
+  Session without a selection render nothing, a Session whose `lastUsed`
+  model is MiniMax stays visible, and a MiniMax model reached through an
+  aggregator stays visible. `tools/extract-theme.py` extracts the host's own
+  theme variables so the preview is faithful.
 
 ```bash
 node tools/host-smoke.mjs      # hits the live endpoint; needs the stored key

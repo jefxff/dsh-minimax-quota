@@ -34,11 +34,15 @@ the plugin.
 
 ## Model-gated display
 
-The browser half reads the Session's `modelSelection` projection and renders
-nothing unless the selected provider or model id names MiniMax. Switching to
-DeepSeek or another route removes the reading, stops the route polling and
-suppresses low-quota notifications; switching back restores it. A blank Session
-with no selection yet shows nothing.
+The reading belongs to MiniMax sessions. `conversation.composer.dock` is
+Session-scoped, so the framework passes the Session id to the entry's
+`inject` callback. The entry resolves that Session's `modelSelection`
+projection — the same value the composer's model seat shows — and the
+component subscribes to it. It renders nothing unless the selected provider or
+model id names MiniMax. Switching to DeepSeek or another route re-renders the
+entry, removes the reading, stops the route polling and suppresses low-quota
+notifications; switching back restores it. A blank Session with no selection
+yet shows nothing.
 
 ## Tests
 

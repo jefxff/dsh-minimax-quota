@@ -61,6 +61,25 @@ function makeReact(seed) {
       return [value, () => {}]
     },
     useEffect() {},
+    useCallback(fn) {
+      return fn
+    },
+    useSyncExternalStore(_subscribe, getSnapshot) {
+      return getSnapshot()
+    },
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * A Session binding stand-in exposing the modelSelection projection the
+ * way the running Harness does: the dock entry's `inject(sessionId)` path
+ * resolves `sessions.binding(id).session.projections.faceOf(name)`.
+ * ------------------------------------------------------------------ */
+function faceOfSelection(selection) {
+  const snapshot = selection === undefined ? undefined : selection
+  return {
+    getSnapshot: () => snapshot,
+    subscribe: () => () => {},
   }
 }
 
@@ -262,6 +281,28 @@ const states = [
     doc: { ok: true, remainingPercent: 62, updatedAt: NOW },
   },
   {
+    key: 'last-used',
+    caption: 'Visible — the Session last used a MiniMax model',
+    selection: { lastUsed: { provider: 'minimax-cn', model: 'MiniMax-M2' } },
+    doc: {
+      ok: true,
+      region: 'CN',
+      label: 'MiniMax 5h',
+      bucket: 'general',
+      remainingPercent: 48,
+      percentSource: 'percent',
+      totalCount: 0,
+      usageCount: 0,
+      weeklyRemainingPercent: 100,
+      resetAt: NOW + 40 * minute,
+      resetsInMs: 40 * minute,
+      windowMs: 240 * minute,
+      warnPercent: 30,
+      criticalPercent: 10,
+      updatedAt: NOW,
+    },
+  },
+  {
     key: 'aggregator-minimax',
     caption: 'Visible — MiniMax reached through an aggregator model id',
     selection: { next: { provider: 'openrouter', model: 'minimax/minimax-m2' } },
@@ -291,8 +332,24 @@ const rendered = states.map((state) => {
   // that state's snapshot into the component's first render.
   let entry = null
   let slotName = null
+  const sessionId = `session-${state.key}`
   const localCtx = {
     ...ctx,
+    sessions: {
+      binding(id) {
+        if (id !== sessionId) return undefined
+        return {
+          session: {
+            projections: {
+              faceOf(name) {
+                if (name !== 'modelSelection') throw new Error(`unexpected projection ${name}`)
+                return faceOfSelection(state.selection)
+              },
+            },
+          },
+        }
+      },
+    },
     slots: {
       inject(name, callback) {
         slotName = name
@@ -311,8 +368,12 @@ const rendered = states.map((state) => {
   })
   fresh.apply(localCtx)
   if (!entry) throw new Error(`state ${state.key} registered no entry`)
-  const tree = entry.component({ translate: ctx.locale.bind(), modelSelection: state.selection })
-  return { ...state, html: render(tree), slot: entry.name, options: entry.options }
+  if (typeof entry.options.inject !== 'function') {
+    throw new Error(`state ${state.key} registered no inject callback`)
+  }
+  const props = entry.options.inject(sessionId)
+  const tree = entry.component(props)
+  return { ...state, html: render(tree), slot: entry.name, options: entry.options, props }
 })
 
 console.log('slot:', rendered[0].slot)
@@ -359,6 +420,17 @@ check(
 check('the unavailable reading shows the error', byKey.unavailable.includes('no MiniMax API key found'))
 check('the reading is hidden for a DeepSeek session', byKey.deepseek === '', byKey.deepseek)
 check('the reading is hidden before a model is selected', byKey['no-selection'] === '', byKey['no-selection'])
+check(
+  'the entry resolves the Session modelSelection face through inject(sessionId)',
+  typeof rendered[0].props.modelSelection === 'function' &&
+    typeof rendered[0].props.modelSelection()?.getSnapshot === 'function' &&
+    rendered[0].props.modelSelection().getSnapshot() !== undefined,
+)
+check(
+  'the reading is visible for a Session whose last model was MiniMax',
+  /data-minimax-quota="ok"/.test(byKey['last-used']),
+  byKey['last-used'],
+)
 check(
   'the reading is visible when the model id names MiniMax through another provider',
   /data-minimax-quota="ok"/.test(byKey['aggregator-minimax']),

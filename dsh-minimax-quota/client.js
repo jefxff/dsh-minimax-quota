@@ -7,6 +7,12 @@
  * the time left before the window resets. Hovering it shows the details the
  * upstream API provides.
  *
+ * The reading belongs to MiniMax sessions only. `conversation.composer.dock`
+ * is a Session-scoped slot, so its `inject` callback receives the Session id;
+ * the entry resolves that Session's `modelSelection` projection once and the
+ * component subscribes to it. Switching to another model re-renders the entry
+ * and removes the reading, its route polling and its notifications.
+ *
  * The browser never sees the MiniMax API key: it reads the Host's cached
  * snapshot over a loopback-only route and polls that route instead of the
  * upstream endpoint.
@@ -55,6 +61,67 @@ window.__ModuleLoader__.load({
     function currentSelection(projection) {
       if (!projection || typeof projection !== 'object') return undefined
       return projection.next ?? projection.lastUsed
+    }
+
+    /**
+     * Resolve the Session's `modelSelection` projection as an observable face.
+     *
+     * The dock slot is Session-scoped: its `inject` callback receives the
+     * Session id. The same projection feeds the composer's model seat, so a
+     * switch made there is visible here on the next update.
+     *
+     * @param {object} ctx - the browser half's plugin context.
+     * @param {string} sessionId - the Session that owns the composer.
+     * @returns {{ getSnapshot: () => unknown, subscribe: (listener: () => void) => () => void } | undefined} the face.
+     */
+    function modelSelectionFace(ctx, sessionId) {
+      if (typeof sessionId !== 'string' || sessionId === '') return undefined
+      try {
+        const binding = ctx.sessions?.binding?.(sessionId)
+        const projections = binding?.session?.projections
+        if (!projections || typeof projections.faceOf !== 'function') return undefined
+        const face = projections.faceOf('modelSelection')
+        if (!face || typeof face.getSnapshot !== 'function' || typeof face.subscribe !== 'function') {
+          return undefined
+        }
+        return face
+      } catch {
+        // A Session that is still assembling has no projection yet; the entry
+        // stays hidden until the binding publishes one.
+        return undefined
+      }
+    }
+
+    /**
+     * Subscribe to the Session's model-selection face.
+     *
+     * An absent face still calls the same hooks in the same order, so a
+     * Session whose projection arrives late never changes the hook shape.
+     *
+     * @param {{ getSnapshot: () => unknown, subscribe: (listener: () => void) => () => void } | undefined} face - the observable face.
+     * @returns {unknown} the current projection snapshot.
+     */
+    function useModelSelection(face) {
+      const subscribe = React.useCallback(
+        (onChange) => {
+          if (!face || typeof face.subscribe !== 'function') return () => {}
+          try {
+            return face.subscribe(onChange)
+          } catch {
+            return () => {}
+          }
+        },
+        [face],
+      )
+      const getSnapshot = React.useCallback(() => {
+        if (!face || typeof face.getSnapshot !== 'function') return undefined
+        try {
+          return face.getSnapshot()
+        } catch {
+          return undefined
+        }
+      }, [face])
+      return React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
     }
 
     const EN = {
@@ -190,22 +257,22 @@ window.__ModuleLoader__.load({
       /**
        * @param {{
        *   translate?: (key: string, params?: Record<string, string | number>) => string,
-       *   useProjection?: (key: string) => unknown,
-       *   modelSelection?: unknown,
-       * }} props - the slot props.
+       *   modelSelection?: (() => { getSnapshot: () => unknown, subscribe: (listener: () => void) => () => void } | undefined)
+       *     | { getSnapshot: () => unknown, subscribe: (listener: () => void) => () => void },
+       * }} props - the slot props; `modelSelection` resolves the face the registration's `inject` prepared.
        * @returns {React.ReactElement | null} the reading, or nothing when the session uses another model.
        */
       function QuotaIndicator(props) {
         const t = typeof props.translate === 'function' ? props.translate : fallback
         // `modelSelection` is the same projection the composer's model seat
-        // reads, so a switch is reflected on the next render. `undefined` while
-        // the projection is still absent keeps the reading hidden until a
-        // MiniMax selection is known.
-        const useProjection =
-          typeof props.useProjection === 'function'
-            ? props.useProjection
-            : () => props.modelSelection
-        const projection = useProjection('modelSelection')
+        // reads, so a switch is reflected as soon as the projection updates.
+        // Resolving it per render lets a Session whose projection arrives a
+        // beat late recover without waiting for the binding to change.
+        const face =
+          typeof props.modelSelection === 'function'
+            ? props.modelSelection()
+            : props.modelSelection
+        const projection = useModelSelection(face)
         const minimax = isMiniMaxSelection(currentSelection(projection))
         const [doc, setDoc] = React.useState(undefined)
         const [now, setNow] = React.useState(() => Date.now())
@@ -342,7 +409,7 @@ window.__ModuleLoader__.load({
     ].join('')
 
     return {
-      inject: ['slots', 'locale'],
+      inject: ['slots', 'locale', 'sessions'],
       apply(ctx) {
         let translate = (key, params) => interpolate(EN, key, params)
         try {
@@ -366,7 +433,14 @@ window.__ModuleLoader__.load({
               name: 'conversation.composer.dock',
               id: 'minimax-quota',
               order: 20,
-              inject: () => ({ translate }),
+              // The dock is Session-scoped, so the framework passes the
+              // Session id. Return a resolver rather than the face itself:
+              // inject results are cached per binding, and resolving at render
+              // time lets a projection that arrives late still be picked up.
+              inject: (sessionId) => ({
+                translate,
+                modelSelection: () => modelSelectionFace(ctx, sessionId),
+              }),
             },
             QuotaIndicator,
           ),
