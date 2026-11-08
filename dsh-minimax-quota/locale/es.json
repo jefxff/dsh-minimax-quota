@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Cuota de MiniMax",
+    "description": "Muestra la cuota restante del plan de tokens de MiniMax bajo el cuadro de mensaje, con una advertencia antes de que se agote la ventana."
+  }
+}

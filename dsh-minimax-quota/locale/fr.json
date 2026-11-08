@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Quota MiniMax",
+    "description": "Affiche le quota restant du forfait de jetons MiniMax sous la zone de message, avec une alerte avant l'épuisement de la fenêtre."
+  }
+}

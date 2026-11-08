@@ -1,0 +1,26 @@
+# The MiniMax quota bundle patch: inserts the Host row that polls the MiniMax
+# token-plan "remains" endpoint and serves the cached snapshot to the browser
+# half. The browser half renders it in the `conversation.composer.dock` slot.
+#
+# Every field below is optional and may be edited by the user in their own
+# `cordis.patch.yml` layer.
+
+- insert:
+    - id: minimax-quota
+      name: '@local/dsh-minimax-quota'
+      config:
+        # Credential reference holding the MiniMax API key. It is resolved
+        # through the Host credential store first, then the process
+        # environment; the key never reaches the browser.
+        apiKeyEnv: MINIMAX_CN_API_KEY
+        # CN, GLOBAL, or AUTO to probe both and keep the region that answers.
+        region: CN
+        # How often the upstream endpoint is polled, in milliseconds.
+        pollIntervalMs: 60000
+        # The `model_remains[].model_name` bucket to display.
+        bucket: general
+        # Prefix of the status-line reading.
+        label: MiniMax 5h
+        # At or below these percentages the reading turns amber and red.
+        warnPercent: 30
+        criticalPercent: 10

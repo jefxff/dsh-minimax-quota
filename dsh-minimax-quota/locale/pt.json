@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Cota do MiniMax",
+    "description": "Mostra a cota restante do plano de tokens do MiniMax abaixo da caixa de mensagem, com um aviso antes de a janela acabar."
+  }
+}

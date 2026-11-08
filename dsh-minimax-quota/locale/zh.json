@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MiniMax 额度",
+    "description": "在输入框下方显示 MiniMax 套餐的剩余额度，并在窗口即将耗尽前预警。"
+  }
+}

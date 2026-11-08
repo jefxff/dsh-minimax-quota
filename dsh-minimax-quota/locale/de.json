@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MiniMax Kontingent",
+    "description": "Zeigt das verbleibende MiniMax-Tokenplan-Kontingent unter dem Nachrichteneingabefeld an und warnt, bevor das Zeitfenster aufgebraucht ist."
+  }
+}

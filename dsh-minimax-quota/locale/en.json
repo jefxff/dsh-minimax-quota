@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "MiniMax quota",
+    "description": "Shows the remaining MiniMax token-plan quota under the message composer, with a warning before the window runs out."
+  }
+}

@@ -1,0 +1,7 @@
+# Extracted DSH bundles and throwaway helpers used while checking the plugin.
+tools/.cache/
+tools/__pycache__/
+*.pyc
+
+# Generated intermediate screenshots.
+docs/states-new.png
